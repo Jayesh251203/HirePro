@@ -1,0 +1,1 @@
+{"name":"Local: check","url":"c:\\Users\\Jayesh\\Desktop\\development\\ML\\HirePro\\check.cpp","tests":[{"id":1763272317756,"input":"adaab\ncca","output":""},{"id":1763272742073,"input":"aabbc\nddefefq","output":""}],"interactive":false,"memoryLimit":1024,"timeLimit":3000,"srcPath":"c:\\Users\\Jayesh\\Desktop\\development\\ML\\HirePro\\check.cpp","group":"local","local":true}

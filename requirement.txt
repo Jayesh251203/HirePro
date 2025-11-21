@@ -1,0 +1,12 @@
+streamlit
+pdfplumber
+pymupdf
+rapidfuzz
+sentence-transformers
+numpy
+pandas
+scikit-learn
+tiktoken
+# Optional: if you plan to integrate Gemini or OpenAI
+google-generativeai
+openai
