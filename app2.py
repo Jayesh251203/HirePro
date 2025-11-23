@@ -41,45 +41,108 @@ def normalize_text(s):
     s = re.sub(r"\s+", " ", s)
     return s.strip()
 
-SKILL_PROMPT = """
-Extract ONLY technical skills from the resume text below.
+SKILL_EXP_COLLEGE_PROMPT = """
+Extract ONLY the following information from the resume text:
 
 Return output as STRICT JSON only:
 {{
-  "skills": ["python", "machine learning", "react", ...]
+  "skills": ["python", "machine learning", ...],
+  "experience_years": <number>, 
+  "college": "<college name>"
+  "cgpa": <8.5>
 }}
 
 Rules:
-- Only include SKILLS (programming languages, frameworks, tools, ML skills, cloud, databases).
-- DO NOT include achievements, sentences, job roles, or soft skills.
-- Skills must be short tokens (1–3 words).
-- Return ONLY JSON — no explanation.
+- "skills": Only technical skills (programming languages, frameworks, tools, ML/AI, cloud, databases). 1–3 words each.
+- "experience_years": Extract total professional experience. If not found, return 0.
+- "college": Extract highest education institute name ONLY (no course, no year).
+- "cgpa": extract CGPA / GPA / Grade (out of 10 or 4). If not found, return null.
 
+STRICT RULES:
+- Return ONLY valid JSON.
+- No explanation, no comments, no markdown.
+- If something is missing, return it as null or [].
+  
 Resume:
 ---
 {resume}
 ---
 """
-def skill_and_achievement_extractor(resume_text):
-    prompt = SKILL_PROMPT.format(resume=resume_text)
+
+def classify_college_tier(college_name):
+    if not college_name:
+        return None
+
+    col = college_name.lower()
+
+    tier1_keywords = [
+        "iit", "indian institute of technology",
+        "nit", "national institute of technology",
+        "iiit", "indian institute of information technology",
+        "bits", "birla institute",
+        "vit vellore", "vellore institute of technology",
+        "dtu", "delhi technological university",
+        "nsut", "nsit", "netaji subhas",
+        "coep", "college of engineering pune",
+        "manipal", "mit manipal",
+        "ict mumbai", "institute of chemical technology"
+    ]
+
+    tier2_keywords = [
+        "government engineering college",
+        "state institute",
+        "state engineering",
+        "sppu", "rtmnu",
+        "srm", "amity", "chandigarh university",
+        "pes university", "rv college",
+        "vit bhopal", "vit chennai"
+    ]
+
+    if any(k in col for k in tier1_keywords):
+        return "Tier 1"
+    elif any(k in col for k in tier2_keywords):
+        return "Tier 2"
+    else:
+        return "Tier 3"
+
+
+def skill_exp_college_extractor(resume_text):
+    prompt = SKILL_EXP_COLLEGE_PROMPT.format(resume=resume_text)
+
     try:
         model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(prompt)
-
         out = response.text.strip()
+
+        # remove optional json fences if present
         out = re.sub(r"^```json|```$", "", out).strip()
 
-        try:
-            data = json.loads(out)
-            skills = data.get("skills", [])
-            skills = [s.lower().strip() for s in skills if isinstance(s, str)]
-            return skills
-        except:
-            return []
+        data = json.loads(out)
+
+        # normalize skills
+        skills = [s.lower().strip() for s in data.get("skills", [])]
+
+        college = data.get("college", None)
+        college_tier = classify_college_tier(college)
+        cgpa = data.get("cgpa", None)
+        return {
+            "skills": skills,
+            "experience_years": data.get("experience_years", 0),
+            "college": college,
+            "college_tier": college_tier,
+            "cgpa": cgpa
+        }
+
     except Exception as e:
         print("LLM error:", e)
-        return []
-    
+        return {
+            "skills": [],
+            "experience_years": 0,
+            "college": None,
+            "college_tier": None,
+            "cgpa": None
+        }
+
 def parse_jd(jd_text):
     if "," in jd_text:
         # comma separated skills
@@ -173,7 +236,7 @@ if "resume_text" not in st.session_state:
 if "jd_text" not in st.session_state:
     st.session_state.jd_text = ""
 
-
+import html
 # ------------------------------------------------------------
 # BUTTON 1: Extract Resume + Skills
 # ------------------------------------------------------------
@@ -191,31 +254,35 @@ if st.button("Extract Resume Text"):
     resume_text = normalize_text(text1 + "\n" + text2)
 
     st.session_state.resume_text = resume_text
-    st.session_state.skills = skill_and_achievement_extractor(resume_text)
+    st.session_state.extracted = skill_exp_college_extractor(resume_text)
 
     st.success("Resume processed successfully!")
 
-# Always show extracted skills IF available
-import html  # make sure this import is at top
 
-if st.session_state.skills:
-    st.subheader("🧠 Extracted Skills ")
+# --- SHOW RESULT CARDS ---
+if "extracted" in st.session_state and st.session_state.extracted:
 
-    skills = st.session_state.skills
+    data = st.session_state.extracted
+    skills = data.get("skills", [])
+    exp = data.get("experience_years", 0)
+    college = data.get("college", "Not Found")
+    tier = data.get("college_tier", "Not Determined")
+    cgpa = data.get("cgpa", None)
+    
+    st.subheader("📄 Extracted Resume Insights")
 
-    # Build pills safely
-    pills_html = "".join(
-        [f"<span class='pill'>{html.escape(s)}</span>" for s in skills]
-    )
-
-    st.markdown(
-        f"<div class='pill-container'>{pills_html}</div>",
-        unsafe_allow_html=True,
-    )
-
+    # --- CARD CONTAINER ---
     st.markdown(
         """
         <style>
+            .card {
+                padding: 20px;
+                border-radius: 12px;
+                background: #111827;
+                border: 1px solid #1F2937;
+                color: white;
+                margin-bottom: 20px;
+            }
             .pill-container { 
                 display: flex; 
                 flex-wrap: wrap; 
@@ -223,18 +290,65 @@ if st.session_state.skills:
                 margin-top: 10px;
             }
             .pill {
-                background: #1E88E5;
+                background: #2563EB;
+                padding: 8px 12px;
+                border-radius: 20px;
+                font-size: 13px;
                 color: white;
-                padding: 8px 15px;
-                border-radius: 30px;
-                font-size: 14px;
-                display: inline-block;
             }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+    # --- SKILLS CARD ---
+    skills_html = "".join([f"<span class='pill'>{html.escape(s)}</span>" for s in skills])
+
+    st.markdown(
+        f"""
+        <div class='card'>
+            <h3>🧠 Technical Skills</h3>
+            <div class='pill-container'>{skills_html}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # --- EXPERIENCE CARD ---
+    st.markdown(
+        f"""
+        <div class='card'>
+            <h3>💼 Experience</h3>
+            <p style='font-size:18px;'>{exp} years</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # --- EDUCATION CARD ---
+    st.markdown(
+        f"""
+        <div class='card'>
+            <h3>🎓 Education</h3>
+            <p><strong>College:</strong> {college}</p>
+            <p><strong>Tier:</strong> {tier}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # --- CGPA CARD ---
+    st.markdown(
+        f"""
+        <div class='card'>
+            <h3>🎯 CGPA</h3>
+            <p style='font-size:18px;'>
+                {cgpa if cgpa not in [None, ""] else "Not Available"}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ------------------------------------------------------------
 # JD INPUT FIELD (always visible)
