@@ -1,1 +1,17 @@
-.env
+# Virtual environments
+.venv/
+venv/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Streamlit caches
+.streamlit/
+
+# OS junk
+.DS_Store
+
+# Other temp/large files
+*.log
