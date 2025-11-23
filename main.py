@@ -46,6 +46,7 @@ st.markdown("""
     
     /* Navigation Bar */
     .navbar {
+        
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -57,7 +58,7 @@ st.markdown("""
         margin: 0.5rem auto;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
         position: sticky;
-        top: 10px;
+        top: -100px;
         z-index: 1000;
     }
     
